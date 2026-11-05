@@ -548,6 +548,13 @@
 
       /* ---------------- load ---------------- */
       function loadFromHash() {
+        // Confirmation links from subscribe emails point here as #confirm=<token>.
+        var c = /#confirm=([A-Za-z0-9]+)/.exec(location.hash || "");
+        if (c) {
+          try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+          if (!DEMO_MODE) confirmAnnounce(c[1]);
+          return false;
+        }
         // Unsubscribe links from announcement emails point here as #unsubscribe=<token>.
         var u = /#unsubscribe=([A-Za-z0-9]+)/.exec(location.hash || "");
         if (u) {
@@ -651,7 +658,15 @@
         if (DEMO_MODE) { el.hidden = true; el.innerHTML = ""; return; }
         var sub = loadJson(SUB_KEY, null);
         el.hidden = false;
-        if (sub && sub.email) {
+        if (sub && sub.email && !sub.confirmed) {
+          el.innerHTML =
+            '<div class="panel">' +
+              '<h2>Get notified about new events</h2>' +
+              '<p class="sub">We sent a confirmation email to ' + esc(sub.email) + '. Tap the link in that email to finish signing up.</p>' +
+              '<button class="btn btn-primary btn-block" data-act="resend-confirm">Resend confirmation email</button>' +
+              '<button class="btn btn-ghost" data-act="change-email">Use a different email</button>' +
+            '</div>';
+        } else if (sub && sub.email) {
           el.innerHTML =
             '<div class="panel">' +
               '<h2>Get notified about new events</h2>' +
@@ -677,10 +692,46 @@
         if (!email || email.indexOf("@") < 0) { toast("Enter an email address to sign up."); return; }
         apiPost({ action: "subscribe", email: email }).then(function (data) {
           if (!data || !data.ok) throw new Error((data && data.error) || "Could not sign up.");
-          saveJson(SUB_KEY, { email: email, token: data.token || "" });
-          renderAnnounce();
-          toast("You\u2019re signed up for new-event emails.");
+          if (data.needs_confirm) {
+            saveJson(SUB_KEY, { email: email, token: data.token || "", confirmed: false });
+            renderAnnounce();
+            toast("Check your email \u2014 tap the confirmation link to finish signing up.");
+          } else {
+            saveJson(SUB_KEY, { email: email, token: data.token || "", confirmed: true });
+            renderAnnounce();
+            toast("You\u2019re signed up for new-event emails.");
+          }
         }).catch(function (e) { toast(e.message || String(e)); });
+      }
+      function confirmAnnounce(token) {
+        apiPost({ action: "confirmSubscribe", token: token }).then(function (data) {
+          if (!data || !data.ok) throw new Error((data && data.error) || "This confirmation link is not valid.");
+          var sub = loadJson(SUB_KEY, null);
+          saveJson(SUB_KEY, { email: (data.email || (sub && sub.email) || ""), token: token, confirmed: true });
+          renderAnnounce();
+          toast("You\u2019re subscribed \u2014 you\u2019ll get one email when a new Swamivatsalya is posted.");
+        }).catch(function (e) { toast(e.message || String(e)); });
+      }
+      function resendConfirmAnnounce() {
+        var sub = loadJson(SUB_KEY, null);
+        var email = sub && sub.email ? sub.email : "";
+        if (!email) { renderAnnounce(); return; }
+        apiPost({ action: "subscribe", email: email }).then(function (data) {
+          if (!data || !data.ok) throw new Error((data && data.error) || "Could not resend.");
+          if (data.needs_confirm) {
+            saveJson(SUB_KEY, { email: email, token: data.token || (sub && sub.token) || "", confirmed: false });
+            renderAnnounce();
+            toast("Confirmation email sent again \u2014 check your inbox.");
+          } else {
+            saveJson(SUB_KEY, { email: email, token: data.token || (sub && sub.token) || "", confirmed: true });
+            renderAnnounce();
+            toast("You\u2019re signed up for new-event emails.");
+          }
+        }).catch(function (e) { toast(e.message || String(e)); });
+      }
+      function changeAnnounceEmail() {
+        saveJson(SUB_KEY, null);
+        renderAnnounce();
       }
       function unsubscribeAnnounce(token) {
         var sub = loadJson(SUB_KEY, null);
@@ -1105,6 +1156,8 @@
         else if (act === "send-link") sendMyLink();
         else if (act === "subscribe") subscribeAnnounce();
         else if (act === "unsub") unsubscribeAnnounce();
+        else if (act === "resend-confirm") resendConfirmAnnounce();
+        else if (act === "change-email") changeAnnounceEmail();
         else if (act === "cancel-ask") { var b = $("cancel-" + id); if (b) b.hidden = false; }
         else if (act === "cancel-no") { var b2 = $("cancel-" + id); if (b2) b2.hidden = true; }
         else if (act === "cancel-yes") cancelRsvp(id);
