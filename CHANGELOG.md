@@ -4,7 +4,7 @@ Backend versions live in `backend/Code.gs` in this repo (one commit per
 change). Frontend versions live in the GitHub repo
 `abhivrup/jcgs-swamivatsalya-rsvp` — see `FRONTEND_HISTORY.md` for the
 grouped version list. Deploy status is the truth that matters: backend v1.6 is deployed
-(confirmed 2026-11-04, his word + live /exec check).
+(confirmed 2026-11-04). v1.7 is pending one redeploy.
 
 Status words: Deployed = running on the test backend / live Pages site.
 Pending = code written and checked, not yet deployed. Never deployed
@@ -126,6 +126,32 @@ or reviewed exactly.
   /exec URL); live /exec check after redeploy returns ok:true.
   Live behavior proof (resubmit over capacity rejected) still open —
   needs a live test RSVP, not yet run.
+
+### Backend v1.7 — subscription confirmation link (2026-11-04) — PENDING (current)
+
+- `subscribe_` no longer subscribes immediately. A new or
+  re-subscribing address gets status `pending` and a confirmation
+  email with a tap-to-confirm link (`#confirm=<token>`); only the new
+  `confirmSubscribe` action flips the row to `active`. An already
+  active address signs up again with no new email (`already: true`).
+- Announcements and the nudge already send only to `active` rows, so
+  pending rows get nothing — no change needed there.
+- Resend limit: at most 3 confirmation emails per address per hour
+  (`CONFIRM_LIMIT_PER_HOUR = 3`, counted from Outbox
+  `subscribe-confirm` rows); past it the form says to try later.
+  No expiry on the link; an unconfirmed pending row just sits there.
+- `unsubscribe_` by token now also works on a `pending` row.
+- Frontend v11 handles both answers: `needs_confirm: true` shows the
+  "check your email" step with resend / use-a-different-email, while
+  the old backend's plain ok still shows "You're signed up". So the
+  page can deploy before this backend redeploy with no mismatch.
+- Needs after redeploy: nothing new — no trigger or setup re-runs
+  (the three installed triggers keep working; no new trigger).
+- Revert: redeploy v1.6 + redeploy frontend v10.
+- Verified: syntax check passes; diff to v1.6 is exactly the
+  `subscribe_` rewrite, `confirmSubscribe_`, `confirmEmail_`,
+  `countRecentConfirms_`, the unsubscribe condition, and the doPost
+  branch. Spec: `rsvp-confirm-scope-2026-11-04.md`.
 
 ## Frontend (GitHub repo `abhivrup/jcgs-swamivatsalya-rsvp`) — DEPLOYED
 
