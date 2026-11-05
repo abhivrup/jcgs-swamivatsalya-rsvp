@@ -3,8 +3,8 @@
 Backend versions live in `backend/Code.gs` in this repo (one commit per
 change). Frontend versions live in the GitHub repo
 `abhivrup/jcgs-swamivatsalya-rsvp` — see `FRONTEND_HISTORY.md` for the
-grouped version list. Deploy status is the truth that matters: backend v1.5 is deployed
-(confirmed 2026-11-04). v1.6 is pending one redeploy.
+grouped version list. Deploy status is the truth that matters: backend v1.6 is deployed
+(confirmed 2026-11-04, his word + live /exec check).
 
 Status words: Deployed = running on the test backend / live Pages site.
 Pending = code written and checked, not yet deployed. Never deployed
@@ -102,7 +102,7 @@ or reviewed exactly.
   Spec: `rsvp-nudge-scope-2026-11-04.md` and
   `backend-changes-2026-11-01.txt`, Change 6.
 
-### Backend v1.6 — dedupe capacity fix (2026-11-04) — PENDING (current)
+### Backend v1.6 — dedupe capacity fix (2026-11-04) — DEPLOYED 2026-11-04
 
 - `createRsvp_`: the duplicate-match path now runs the same capacity
   check as a new RSVP — other attendees' headcount plus the new party
@@ -122,6 +122,10 @@ or reviewed exactly.
 - Verified: syntax check passes; diff to v1.5 is exactly the
   capacity block, the notify argument change, and their comments.
   Found by the 2026-11-04 full test/review pass.
+- Deployed: redeployed as a new version 2026-11-04 evening (same
+  /exec URL); live /exec check after redeploy returns ok:true.
+  Live behavior proof (resubmit over capacity rejected) still open —
+  needs a live test RSVP, not yet run.
 
 ## Frontend (GitHub repo `abhivrup/jcgs-swamivatsalya-rsvp`) — DEPLOYED
 
