@@ -1,14 +1,10 @@
 # Changelog — JCGS Swamivatsalya RSVP app
 
-> Note: this copy was uploaded to GitHub as one batch on 2026-11-04.
-> The per-change commit history is kept locally; this file is the
-> version-by-version record. See `backend/README.md`.
-
 Backend versions live in `backend/Code.gs` in this repo (one commit per
-change in the local history). Frontend versions live in the GitHub repo
+change). Frontend versions live in the GitHub repo
 `abhivrup/jcgs-swamivatsalya-rsvp` — see `FRONTEND_HISTORY.md` for the
-grouped version list. Deploy status is the truth that matters: only
-backend v1.0 is deployed. Everything newer is pending one redeploy.
+grouped version list. Deploy status is the truth that matters: backend v1.5 is deployed
+(confirmed 2026-11-04). v1.6 is pending one redeploy.
 
 Status words: Deployed = running on the test backend / live Pages site.
 Pending = code written and checked, not yet deployed. Never deployed
@@ -32,7 +28,7 @@ or reviewed exactly.
   URL, not the app (fixed by Change 2, pending).
 - Verified: syntax check passes. Source: pristine starter snapshot.
 
-### Backend v1.1 — Change 2 (2026-11-01) — PENDING
+### Backend v1.1 — Change 2 (2026-11-01) — DEPLOYED (as part of v1.5, 2026-11-04)
 
 - `notify_`: manage links now point at the frontend app
   (`https://abhivrup.github.io/jcgs-swamivatsalya-rsvp/`) instead of
@@ -42,7 +38,7 @@ or reviewed exactly.
 - Verified: syntax check passes; diff to v1.0 is exactly this line.
   Spec: `backend-changes-2026-11-01.txt`, Change 2.
 
-### Backend v1.2 — Change 3 (2026-11-01) — PENDING
+### Backend v1.2 — Change 3 (2026-11-01) — DEPLOYED (as part of v1.5, 2026-11-04)
 
 - 60-second `CacheService` cache for the events list in `listEvents_`,
   cleared on every successful create/update/cancel in `doPost`.
@@ -55,7 +51,7 @@ or reviewed exactly.
   cache-clearing `doPost` branches.
   Spec: `backend-changes-2026-11-01.txt`, Change 3.
 
-### Backend v1.3 — Change 4 (2026-11-01) — PENDING
+### Backend v1.3 — Change 4 (2026-11-01) — DEPLOYED (as part of v1.5, 2026-11-04)
 
 - New `myRsvpsAll` action returning all of one person's RSVPs in a
   single call (reuses `myRsvps_`, so it includes the name/email/phone
@@ -66,7 +62,7 @@ or reviewed exactly.
   branch plus the `myRsvpsAll_` function.
   Spec: `backend-changes-2026-11-01.txt`, Change 4.
 
-### Backend v1.4 — Change 5: email announcements (2026-11-02) — PENDING
+### Backend v1.4 — Change 5: email announcements (2026-11-02) — DEPLOYED (as part of v1.5, 2026-11-04)
 
 - New `Subscribers` tab (`email, token, subscribed_at, status`),
   `subscribe` / `unsubscribe` actions (dedupe by email, token links),
@@ -85,7 +81,7 @@ or reviewed exactly.
   Spec: `email-announcements-scope-2026-11-01.md` and
   `backend-changes-2026-11-01.txt`, Change 5.
 
-### Backend v1.5 — Change 6: RSVP nudge (2026-11-04) — PENDING (current)
+### Backend v1.5 — Change 6: RSVP nudge (2026-11-04) — DEPLOYED 2026-11-04
 
 - New daily 9 AM check `sendRsvpNudges()`: one email, 3 days before
   an event (`NUDGE_DAYS_BEFORE = 3`, one constant sets timing), to
@@ -106,6 +102,27 @@ or reviewed exactly.
   Spec: `rsvp-nudge-scope-2026-11-04.md` and
   `backend-changes-2026-11-01.txt`, Change 6.
 
+### Backend v1.6 — dedupe capacity fix (2026-11-04) — PENDING (current)
+
+- `createRsvp_`: the duplicate-match path now runs the same capacity
+  check as a new RSVP — other attendees' headcount plus the new party
+  must fit within capacity; the RSVP's own held spots do not count
+  against it. Previously a resubmission could grow a party past
+  capacity without any check. The check runs inside the existing
+  lock, like the new-RSVP check.
+- Same path now notifies the UPDATED contact: if a resubmission
+  changes the email/phone, the confirmation goes to the new address
+  instead of the old row's address.
+- No frontend change needed: the page already shows the backend's
+  "Not enough spots left" error as a message.
+- Needs after redeploy: nothing new — no trigger or setup re-runs
+  for this change (run the pending Change 5/6 trigger installs if
+  they have not been run yet).
+- Revert: redeploy v1.5.
+- Verified: syntax check passes; diff to v1.5 is exactly the
+  capacity block, the notify argument change, and their comments.
+  Found by the 2026-11-04 full test/review pass.
+
 ## Frontend (GitHub repo `abhivrup/jcgs-swamivatsalya-rsvp`) — DEPLOYED
 
 Frontend versions are already git-controlled on GitHub. The distinct
@@ -120,8 +137,11 @@ live versions, grouped by `index.html` content hash (see
 - v6 (2026-11-01) date fix + parallel loading speed.
 - v7 (2026-11-01) cached fast-load (7-day cache, background refresh).
 - v8 (2026-11-01) instant tab switching, badge taps register.
-- v9 (2026-11-02) announcements signup form — live; backend half
-  pending (backend v1.4). No frontend change for the nudge (v1.5).
+- v9 (2026-11-02) announcements signup form — superseded by v10 on
+  2026-11-04; backend half pending (backend v1.4). No frontend change
+  for the nudge (v1.5).
+- v10 (2026-11-04) phone/WhatsApp fields disabled, email-only — live
+  (commit `1e8bd35`, byte-verified).
 
 ## Deploy log
 
@@ -130,6 +150,9 @@ live versions, grouped by `index.html` content hash (see
 - 2026-11-01: frontend v4–v8 deployed (Pages queue jam mid-day;
   same content re-deployed in places — see FRONTEND_HISTORY.md).
 - 2026-11-02: frontend v9 deployed. Backend Changes 1–5 still pending.
-- 2026-11-04: backend v1.5 (Change 6) written. Backend Changes 1–6
-  still pending one redeploy + trigger runs. Friday 2026-11-06
-  reminder set for the Sheet-side action.
+- 2026-11-04: backend v1.5 (Change 6) written; backend v1.5 confirmed
+  live the same day (the deployed `/exec` endpoint answers the new
+  `myRsvpsAll` action). Trigger runs (setupSheet /
+  installAnnouncementTrigger / installNudgeTrigger) still unconfirmed.
+  Friday 2026-11-06 reminder set for the Sheet-side action.
+- 2026-11-04: frontend v10 deployed (phone fields disabled).
