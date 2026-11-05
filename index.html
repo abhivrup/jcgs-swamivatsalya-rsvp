@@ -186,6 +186,8 @@
         border: 1.5px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink);
       }
       .field input:focus, .field textarea:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: var(--gold); }
+      .field input:disabled { background: var(--surface-2); color: var(--ink-faint); cursor: not-allowed; opacity: .7; }
+      .field.is-disabled label { color: var(--ink-faint); }
       .field textarea { resize: vertical; min-height: 74px; }
       .field .err { display: none; color: var(--danger); font-size: 14.5px; font-weight: 600; margin-top: 6px; }
       .field.invalid input { border-color: var(--danger); }
@@ -773,16 +775,16 @@
               '<input type="text" id="in-name" autocomplete="name" placeholder="Full name" value="' + esc(saved ? saved.name : "") + '" />' +
               '<div class="err">Please enter your name.</div>' +
             '</div>' +
-            '<div class="form-note"><b>How can we reach you?</b> Give at least one — your <b>email</b> or your <b>WhatsApp number</b> (or both). Your confirmation &amp; manage link will be sent to what you provide; if you give both, we\u2019ll send to both.</div>' +
+            '<div class="form-note"><b>How can we reach you?</b> Give your <b>email</b>. Your confirmation &amp; manage link will be sent to that email. WhatsApp messages are not sent yet, so the phone number field is turned off for now.</div>' +
             '<div class="field" id="f-email">' +
-              '<label for="in-email">Email address <span class="hint">(at least one of email / WhatsApp is required)</span></label>' +
+              '<label for="in-email">Email address <span class="hint">(required)</span></label>' +
               '<input type="email" id="in-email" autocomplete="email" inputmode="email" placeholder="you@example.com" value="' + esc(saved ? saved.email : "") + '" />' +
-              '<div class="err">Please enter a valid email address, or leave this blank and give your WhatsApp number below.</div>' +
+              '<div class="err">Please enter a valid email address.</div>' +
             '</div>' +
-            '<div class="field" id="f-phone">' +
-              '<label for="in-phone">Mobile / WhatsApp number <span class="hint">(at least one of email / WhatsApp is required)</span></label>' +
-              '<input type="tel" id="in-phone" autocomplete="tel" inputmode="tel" placeholder="(916) 555-0123" value="' + esc(saved ? saved.phone : "") + '" />' +
-              '<div class="err">Please enter a valid mobile number, or leave this blank and give your email above.</div>' +
+            '<div class="field is-disabled" id="f-phone">' +
+              '<label for="in-phone">Mobile / WhatsApp number <span class="hint">(not available yet)</span></label>' +
+              '<input type="tel" id="in-phone" autocomplete="tel" inputmode="tel" placeholder="WhatsApp coming soon" value="" disabled />' +
+              '<div class="err">WhatsApp messages are not sent yet.</div>' +
             '</div>' +
             '<div class="party-err" id="contact-err" role="alert"></div>';
         }
@@ -834,22 +836,10 @@
         if (!isEdit) {
           name = $("in-name").value.trim();
           email = $("in-email").value.trim();
-          phone = $("in-phone").value.trim();
+          phone = ""; // Phone field is disabled until WhatsApp sending is enabled.
           ok = fieldInvalid("f-name", !name) && ok;
-          var hasE = email !== "", hasP = phone !== "";
           var emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-          var phoneDigits = phone.replace(/\D/g, "");
-          var phoneOk = phoneDigits.length >= 10 && phoneDigits.length <= 15;
-          var cerr = $("contact-err");
-          if (!hasE && !hasP) {
-            fieldInvalid("f-email", true); fieldInvalid("f-phone", true);
-            cerr.textContent = "Please give at least one — your email or your WhatsApp number — so we can send your confirmation & manage link.";
-            cerr.classList.add("show"); ok = false;
-          } else {
-            cerr.classList.remove("show");
-            if (hasE) ok = fieldInvalid("f-email", !emailOk) && ok; else fieldInvalid("f-email", false);
-            if (hasP) ok = fieldInvalid("f-phone", !phoneOk) && ok; else fieldInvalid("f-phone", false);
-          }
+          ok = fieldInvalid("f-email", !emailOk) && ok;
         }
         var party = formCtx.adults + formCtx.children;
         var existing = isEdit ? MY.filter(function (r) { return r.rsvp_id === formCtx.rsvpId; })[0] : null;
@@ -1018,11 +1008,11 @@
         }
         html += '<div class="panel" style="margin-top:16px;">' +
           '<h2 style="font-size:19px;">RSVP’d from another phone?</h2>' +
-          '<p class="sub">Enter the email or WhatsApp number you used, and we\u2019ll send you your personal manage link again.</p>' +
+          '<p class="sub">Enter the email you used, and we will send you your personal manage link again.</p>' +
           '<div class="field" id="f-link-email"><label for="in-link-email">Email address</label>' +
           '<input type="email" id="in-link-email" inputmode="email" placeholder="you@example.com" /></div>' +
-          '<div class="field" id="f-link-phone"><label for="in-link-phone">Mobile / WhatsApp number</label>' +
-          '<input type="tel" id="in-link-phone" inputmode="tel" placeholder="(916) 555-0123" /></div>' +
+          '<div class="field is-disabled" id="f-link-phone"><label for="in-link-phone">Mobile / WhatsApp number <span class="hint">(not available yet)</span></label>' +
+          '<input type="tel" id="in-link-phone" inputmode="tel" placeholder="WhatsApp coming soon" disabled /></div>' +
           '<div class="party-err" id="link-err" role="alert"></div>' +
           '<button class="btn btn-primary btn-block" data-act="send-link">Send me my manage link</button>' +
         '</div>';
@@ -1031,10 +1021,10 @@
 
       function sendMyLink() {
         var email = $("in-link-email").value.trim();
-        var phone = $("in-link-phone").value.trim();
+        var phone = ""; // Phone lookup disabled until WhatsApp sending is enabled.
         var err = $("link-err");
-        if (!email && !phone) {
-          err.textContent = "Give the email or WhatsApp number you used for the RSVP.";
+        if (!email) {
+          err.textContent = "Give the email you used for the RSVP.";
           err.classList.add("show"); return;
         }
         err.classList.remove("show");
@@ -1053,7 +1043,7 @@
         apiPost({ action: "sendMyLink", email: email, phone: phone })
           .then(function (data) {
             if (!data || !data.ok) throw new Error((data && data.error) || "Could not send the link.");
-            toast("Manage link sent. Check your email or WhatsApp.");
+            toast("Manage link sent. Check your email.");
           })
           .catch(function (e) { err.textContent = e.message || String(e); err.classList.add("show"); });
       }
