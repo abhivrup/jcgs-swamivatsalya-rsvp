@@ -28,7 +28,8 @@ even when it was deployed more than once (Nov 1 Pages queue jam).
 | v6 | `a207151` | 2026-11-01 | 55,516 | `46e64c54bb9e` | Date fix + parallel My RSVPs loading (render events first). |
 | v7 | `7c0e3ee` | 2026-11-01 | 57,490 | `e9736069019e` | Cached fast-load: 7-day cache, render cached copy, background refresh. |
 | v8 | `e667d0c` | 2026-11-01 | 57,906 | `44dc2d41f495` | Instant tab switching; badge taps register. Matches the local `swamivatsalya-rsvp-frontend-live-test-BEFORE-announcements-2026-11-02.html` copy byte-for-byte. |
-| v9 | `7ea5a02` | 2026-11-02 | 61,137 | `52c20b29a7f6` | "Get notified about new events" signup form. Backend half pending (backend v1.4). Matches the local `swamivatsalya-rsvp-frontend-live-test.html` copy byte-for-byte. Current live version. |
+| v9 | `7ea5a02` | 2026-11-02 | 61,137 | `52c20b29a7f6` | "Get notified about new events" signup form. Backend half pending (backend v1.4). Matches the local `swamivatsalya-rsvp-frontend-live-test.html` copy byte-for-byte. |
+| v10 | `1e8bd35` | 2026-11-04 | 60,435 | `b6bf1e1e88dc` | Phone/WhatsApp fields disabled (greyed out, email-only) until WhatsApp sending is enabled; email validation and wording updated in the RSVP form and the manage-link panel. Single-commit in-place upload (no rename triple). Current live version. |
 
 ## Notes
 
@@ -43,3 +44,7 @@ even when it was deployed more than once (Nov 1 Pages queue jam).
   bytes) and `swamivatsalya-rsvp-frontend-BEFORE-announcements-2026-11-02.html`
   (57,794 bytes). Treat them as local working copies only.
 - No frontend change was needed for backend Change 6 (RSVP nudge).
+- v10 (2026-11-04) deployed by a single in-place upload commit
+  (`1e8bd35`); verified byte-identical (60,435 bytes, SHA-256
+  `b6bf1e1e88dc…`) from both raw.githubusercontent.com and the live
+  Pages URL. Pages run #33 succeeded.
