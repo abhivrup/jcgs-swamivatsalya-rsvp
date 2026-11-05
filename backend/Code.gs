@@ -179,8 +179,18 @@ function createRsvp_(b) {
       var r = rows[i];
       if (r.event_id !== b.event_id || r.status !== 'active') continue;
       if ((email && r.email === email) || (phone && r.phone === phone)) {
+        // v1.6: a resubmission that grows the party must pass the same
+        // capacity check as a new RSVP (spots already held by this RSVP
+        // do not count against it). Previously this path updated without
+        // any check, so it could push an event over capacity.
+        var others = (headcounts_()[b.event_id] || 0) - (Number(r.adults || 0) + Number(r.children || 0));
+        if (others + adults + children > Number(ev.capacity)) {
+          return { ok: false, error: 'Not enough spots left for that headcount.', spots_left: Math.max(0, Number(ev.capacity) - others) };
+        }
         writeRsvpRow_(sh, i + 2, { name: name, email: email || r.email, phone: phone || r.phone, adults: adults, children: children, comment: String(b.comment || ''), updated_at: new Date() });
-        notify_(r, ev, 'updated');
+        // v1.6: notify the UPDATED contact, not the pre-update row, so a
+        // changed email/phone gets the confirmation instead of the old one.
+        notify_({ rsvp_id: r.rsvp_id, event_id: r.event_id, name: name, email: email || r.email, phone: phone || r.phone, adults: adults, children: children, token: r.token }, ev, 'updated');
         return { ok: true, deduped: true, token: r.token, message: 'Your existing RSVP was updated (no double-count).' };
       }
     }
