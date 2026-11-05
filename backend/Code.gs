@@ -31,6 +31,9 @@ var FRONTEND_URL = 'https://abhivrup.github.io/jcgs-swamivatsalya-rsvp/';
 var ANNOUNCED_PROP_KEY = 'jcgs.rsvp.announced.v1';
 var NUDGE_DAYS_BEFORE = 3; // Change 6: nudge goes out this many days before the event.
 
+/** Change 7: max confirmation emails per address per hour (resend limit). */
+var CONFIRM_LIMIT_PER_HOUR = 3;
+
 // ---- WhatsApp Business Platform config (leave blank for email-first pilot) ----
 var WHATSAPP_PHONE_NUMBER_ID = ''; // e.g. '123456789012345'
 var WHATSAPP_ACCESS_TOKEN = '';     // store in Script Properties instead for real use
@@ -102,6 +105,7 @@ function doPost(e) {
     if (body.action === 'sendMyLink') return json_(sendMyLink_(body));
     if (body.action === 'subscribe') return json_(subscribe_(body));
     if (body.action === 'unsubscribe') return json_(unsubscribe_(body));
+    if (body.action === 'confirmSubscribe') return json_(confirmSubscribe_(body));
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -448,21 +452,83 @@ function subscribe_(b) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sh = ensureSheet_(ss, SUBSCRIBERS_SHEET, ['email', 'token', 'subscribed_at', 'status']);
     var rows = readRows_(SUBSCRIBERS_SHEET);
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].email === email) {
-        if (rows[i].status === 'active') return { ok: true, token: rows[i].token };
+    for (var k = 0; k < rows.length; k++) {
+      if (rows[k].email === email) {
+        // Change 7: already subscribed — no new email, nothing changes.
+        if (rows[k].status === 'active') return { ok: true, token: rows[k].token, already: true };
+        // Pending or unsubscribed: fresh token, back to pending, and send
+        // a confirmation email. The row only becomes active when the
+        // confirmation link is tapped (confirmSubscribe_).
+        if (countRecentConfirms_(email) >= CONFIRM_LIMIT_PER_HOUR) {
+          return { ok: false, error: 'Too many confirmation emails sent to this address. Please try again later.' };
+        }
         var fresh = Utilities.getUuid().replace(/-/g, '');
-        sh.getRange(i + 2, 2).setValue(fresh);
-        sh.getRange(i + 2, 3).setValue(new Date());
-        sh.getRange(i + 2, 4).setValue('active');
-        return { ok: true, token: fresh };
+        sh.getRange(k + 2, 2).setValue(fresh);
+        sh.getRange(k + 2, 3).setValue(new Date());
+        sh.getRange(k + 2, 4).setValue('pending');
+        confirmEmail_(email, fresh);
+        return { ok: true, token: fresh, needs_confirm: true };
       }
     }
+    if (countRecentConfirms_(email) >= CONFIRM_LIMIT_PER_HOUR) {
+      return { ok: false, error: 'Too many confirmation emails sent to this address. Please try again later.' };
+    }
     var token = Utilities.getUuid().replace(/-/g, '');
-    sh.appendRow([email, token, new Date(), 'active']);
-    return { ok: true, token: token };
+    sh.appendRow([email, token, new Date(), 'pending']);
+    confirmEmail_(email, token);
+    return { ok: true, token: token, needs_confirm: true };
   } finally {
     lock.releaseLock();
+  }
+}
+
+/** Change 7: confirm a subscription from the emailed link. Flips a pending row to active. */
+function confirmSubscribe_(b) {
+  var token = String(b.token || '').trim();
+  if (!token) return { ok: false, error: 'This confirmation link is not valid. Please sign up again.' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SUBSCRIBERS_SHEET);
+    if (!sh) return { ok: false, error: 'This confirmation link is not valid. Please sign up again.' };
+    var rows = readRows_(SUBSCRIBERS_SHEET);
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].token === token) {
+        if (rows[i].status === 'active') return { ok: true, email: rows[i].email, already: true };
+        sh.getRange(i + 2, 4).setValue('active');
+        return { ok: true, email: rows[i].email };
+      }
+    }
+    return { ok: false, error: 'This confirmation link is not valid. Please sign up again.' };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Change 7: send the confirmation email with the tap-to-confirm link. */
+function confirmEmail_(email, token) {
+  var body = 'Please confirm you want new-event emails for Swamivatsalya (the community meal).\n\n' +
+    'Tap this link to confirm: ' + FRONTEND_URL + '#confirm=' + token + '\n\n' +
+    "If you didn't ask for this, just ignore this email — you won't be signed up and you won't get any more emails about it.";
+  MailApp.sendEmail(email, 'Confirm your Swamivatsalya new-event emails', body);
+  logOutbox_('email', email, 'subscribe-confirm', '', 'SENT', '');
+}
+
+/** Change 7: how many confirmation emails went to this address in the last hour. */
+function countRecentConfirms_(email) {
+  try {
+    var rows = readRows_(OUTBOX_SHEET);
+    var cutoff = new Date().getTime() - 3600000;
+    var n = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].kind === 'subscribe-confirm' && rows[i].to === email) {
+        var t = new Date(rows[i].queued_at).getTime();
+        if (!isNaN(t) && t >= cutoff) n++;
+      }
+    }
+    return n;
+  } catch (e) {
+    return 0;
   }
 }
 
@@ -477,7 +543,7 @@ function unsubscribe_(b) {
     if (!sh) return { ok: true };
     var rows = readRows_(SUBSCRIBERS_SHEET);
     for (var i = 0; i < rows.length; i++) {
-      if (rows[i].token === token && rows[i].status === 'active') {
+      if (rows[i].token === token && (rows[i].status === 'active' || rows[i].status === 'pending')) {
         sh.getRange(i + 2, 4).setValue('unsubscribed');
       }
     }
