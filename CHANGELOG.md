@@ -189,11 +189,13 @@ or reviewed exactly.
 ### Backend v1.9 — My RSVPs shows only the latest RSVP per event + each row carries its own token (2026-11-05) — PENDING (current)
 
 - Bug reported 2026-11-05 ~18:18 PST: after the v1.8 fix, one manage
-  link showed Test Event 2 three times. The v1.8 email expansion
-  returns every row for the email, and the Sheet holds duplicate
-  active rows for that email + event (cause still being read off the
-  Sheet — see the 18:22 browser check; the count says 5 attending,
-  so three 2-adult rows cannot all be live headcount).
+  link showed Test Event 2 three times. Root cause (verified by the
+  18:22 browser read of the Sheet): NOT duplicate rows — the Sheet
+  holds exactly one active test-2 row for that email. The page calls
+  `myRsvps` once per stored token, and the device held 3 tokens
+  (test-1/2/3 RSVPs); v1.8's email expansion returned the same
+  test-2 row once per token (test-1 is past, test-3 is 'close', so
+  only test-2 survived the filter, 3 times).
 - `myRsvps_` now keeps only the latest RSVP per event — the most
   recently updated row wins (`rowTime_`: updated_at, else
   created_at, else sheet order). One card per event, always the
