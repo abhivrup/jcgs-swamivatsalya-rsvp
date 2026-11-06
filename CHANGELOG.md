@@ -9,7 +9,10 @@ contains it and was redeployed by him 2026-11-05 ~18:14 PST (backend
 alive confirmed via listEvents; version proof pending the
 second-device test). v1.9 was redeployed by him 2026-11-05 ~18:29
 PST (he said "Done"; behaviour proof is the single-card My RSVPs
-on the second device). v1.10 is pending one redeploy.
+on the second device). v1.10 was redeployed by him 2026-11-05
+~19:22 PST — the first attempt did not take (cancel bug still
+present, no latency change), the second attempt is confirmed
+working by him: cancel bug gone, confirm tap faster.
 
 Status words: Deployed = running on the test backend / live Pages site.
 Pending = code written and checked, not yet deployed. Never deployed
@@ -219,7 +222,40 @@ or reviewed exactly.
   `myRsvps_` latest-per-event dedupe, the `token` field, and the
   `rowTime_` helper.
 
-### Backend v1.10 — My RSVPs survives cancelling the link's own RSVP + confirmation emails send in the background (2026-11-05) — PENDING (current)
+### Backend v1.11 — Single RSVPs read on save / update (small safe speedups) (2026-11-06) — PENDING (current)
+
+- Fallback he named on 2026-11-05 ~19:05 PST ("Lets try no 2 and if
+  not we will do Small Safe speedups"): option 2 (v1.10 background
+  email) gave no noticeable latency improvement, so this is the
+  fallback. The Confirm RSVP tap read the RSVPs sheet twice —
+  once for the dedupe scan, once inside `headcounts_()` — and the
+  Save-changes path did the same (one read in `mutateRsvp_`, one
+  in `headcounts_()`). Both now total the attending headcount from
+  the rows already read: `createRsvp_` totals once after its
+  single `readRows_`, and `mutateRsvp_` passes its rows to the
+  callback so `updateRsvp_` needs no second read. Total Sheet
+  reads on a save go from 3 to 2 (Events once, RSVPs once).
+- No behaviour change: same capacity math, same error strings,
+  same return values — the totals are computed from the identical
+  row set `headcounts_()` would have re-read. `headcounts_()`
+  itself is kept for `listEvents_` and `sendRsvpNudges`. No
+  frontend change, no trigger or setup re-runs needed — same
+  redeploy steps as before (new version of the existing
+  deployment, not a new deployment).
+- Honest expectation, as told to him on 2026-11-05: about half a
+  second to a second at most. The ~3-second Google redirect floor
+  stays unless the app leaves Apps Script, so this does not make
+  the tap feel fast — it only trims the save itself. The
+  "Saving…" spinner from frontend v16 is already live, so that
+  half of the original v1.11 offer is done.
+- Revert: redeploy v1.10 (the double read returns; nothing else changes).
+- Verified: syntax check passes (`node --check` on a `.js` copy —
+  Node 24 rejects the `.gs` extension); diff to v1.10 is exactly
+  the attending total in `createRsvp_`, the two `headcounts_()`
+  removals there, the rows-passing change in `mutateRsvp_`, and
+  the attending total in `updateRsvp_`.
+
+### Backend v1.10 — My RSVPs survives cancelling the link's own RSVP + confirmation emails send in the background (2026-11-05) — DEPLOYED (confirmed 2026-11-05 ~19:22 PST)
 
 - Bug reported 2026-11-05 ~19:07 PST: on a new device, opening
   the app and RSVP'ing showed previous RSVPs fine — but after
