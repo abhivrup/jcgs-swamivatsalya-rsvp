@@ -638,7 +638,7 @@
             var nm = r.name || d.name || "", em = r.email || d.email || "", ph = r.phone || d.phone || "";
             if (r.name) saveDetail(r.rsvp_id, { name: nm, email: em, phone: ph });
             all.push({
-              rsvp_id: r.rsvp_id, event_id: r.event_id, token: part.token,
+              rsvp_id: r.rsvp_id, event_id: r.event_id, token: r.token || part.token,
               title: r.title || (ev ? ev.title : ""), dateLabel: (function () { var dd = parseDate(r.date); return dd ? fmtLong(dd) : (ev ? ev.dateLabel : ""); })(),
               start_time: ev ? ev.start_time : "", place: ev ? ev.location : "",
               adults: Number(r.adults || 0), children: Number(r.children || 0),
