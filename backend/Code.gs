@@ -74,6 +74,14 @@ function installNudgeTrigger() {
   ScriptApp.newTrigger('sendRsvpNudges').timeBased().everyDays(1).atHour(9).create();
 }
 
+/** Run once from the editor to create the 1-minute queued-confirmation sender (v1.10). */
+function installConfirmSenderTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendQueuedConfirmations') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendQueuedConfirmations').timeBased().everyMinutes(1).create();
+}
+
 function ensureSheet_(ss, name, headers) {
   var sh = ss.getSheetByName(name);
   if (!sh) { sh = ss.insertSheet(name); }
@@ -194,7 +202,8 @@ function createRsvp_(b) {
         writeRsvpRow_(sh, i + 2, { name: name, email: email || r.email, phone: phone || r.phone, adults: adults, children: children, comment: String(b.comment || ''), updated_at: new Date() });
         // v1.6: notify the UPDATED contact, not the pre-update row, so a
         // changed email/phone gets the confirmation instead of the old one.
-        notify_({ rsvp_id: r.rsvp_id, event_id: r.event_id, name: name, email: email || r.email, phone: phone || r.phone, adults: adults, children: children, token: r.token }, ev, 'updated');
+        // v1.10: queued, not sent inline — sending here made the tap wait.
+        queueNotify_({ rsvp_id: r.rsvp_id, event_id: r.event_id, name: name, email: email || r.email, phone: phone || r.phone, adults: adults, children: children, token: r.token }, 'updated');
         return { ok: true, deduped: true, token: r.token, message: 'Your existing RSVP was updated (no double-count).' };
       }
     }
@@ -209,7 +218,7 @@ function createRsvp_(b) {
     var now = new Date();
     sh.appendRow([Utilities.getUuid(), b.event_id, name, email, phone, adults, children, String(b.comment || ''), token, 'active', now, now]);
     var created = { event_id: b.event_id, name: name, email: email, phone: phone, adults: adults, children: children, token: token };
-    notify_(created, ev, 'confirmation');
+    queueNotify_(created, 'confirmation'); // v1.10: queued, not sent inline
     return { ok: true, token: token };
   } finally {
     lock.releaseLock();
@@ -219,7 +228,12 @@ function createRsvp_(b) {
 function myRsvps_(token) {
   if (!token) return [];
   var rows = readRows_(RSVPS_SHEET);
-  var mine = rows.filter(function (r) { return r.token === token && r.status === 'active'; });
+  // Anchor on the token's row whatever its status: if the RSVP this
+  // link was for has since been cancelled, the email still has other
+  // active RSVPs and they must still show. (Bug 2026-11-05: on a new
+  // device, cancelling the only RSVP that device knew emptied My
+  // RSVPs entirely, hiding RSVPs made on other devices.)
+  var mine = rows.filter(function (r) { return r.token === token; });
   if (!mine.length) return [];
   // One manage link now shows every RSVP under the same email, so a
   // second device sees all events — not just the one the link is for.
@@ -231,6 +245,10 @@ function myRsvps_(token) {
     mine = rows.filter(function (r) {
       return r.status === 'active' && String(r.email || '').trim().toLowerCase() === email;
     });
+  } else {
+    // Phone-only: the anchor row may itself be cancelled, so drop
+    // non-active rows here (the email branch above already does).
+    mine = mine.filter(function (r) { return r.status === 'active'; });
   }
   // Active events only — same rule as listEvents_: the event must still
   // be open and its date today or in the future. RSVPs for past (or
@@ -277,7 +295,7 @@ function updateRsvp_(b) {
     var adults = clampCount_(b.adults), children = clampCount_(b.children);
     if (ev && others + adults + children > Number(ev.capacity)) return { ok: false, error: 'That change would exceed the event capacity.' };
     writeRsvpRow_(sh, rowIdx, { adults: adults, children: children, comment: String(b.comment == null ? r.comment : b.comment), updated_at: new Date() });
-    if (ev) notify_(r, ev, 'updated');
+    if (ev) queueNotify_(r, 'updated'); // v1.10: queued, not sent inline
     return { ok: true };
   });
 }
@@ -287,7 +305,7 @@ function cancelRsvp_(b) {
     sh.getRange(rowIdx, 10).setValue('cancelled'); // status column
     sh.getRange(rowIdx, 12).setValue(new Date());   // updated_at column
     var ev = findEvent_(r.event_id);
-    if (ev) notify_(r, ev, 'cancelled');
+    if (ev) queueNotify_(r, 'cancelled'); // v1.10: queued, not sent inline
     return { ok: true };
   });
 }
@@ -319,7 +337,7 @@ function sendMyLink_(b) {
     return r.status === 'active' && ((email && r.email === email) || (phone && r.phone === phone));
   })[0];
   if (!match) return { ok: false, error: 'No active RSVP found for that contact.' };
-  notify_(match, null, 'manage-link');
+  queueNotify_(match, 'manage-link'); // v1.10: queued, not sent inline
   return { ok: true };
 }
 
@@ -338,6 +356,64 @@ function sendDayBeforeReminders() {
 }
 
 // ---------------------------------------------------------------- notifications
+
+/**
+ * Queue a user-triggered email (confirmation / updated / cancelled /
+ * manage-link) instead of sending it inside the tap (v1.10).
+ * MailApp.sendEmail is synchronous, so sending inline made every
+ * Confirm tap wait ~1–3s extra. The RSVP row is written BEFORE the
+ * queue row, so a send failure can never lose an RSVP — the row
+ * stays visible in Outbox (FAILED with the error after a send
+ * attempt throws; FAILED rows are not retried automatically).
+ * The 1-minute trigger (installConfirmSenderTrigger) sends queued rows.
+ */
+function queueNotify_(rsvp, kind) {
+  var detail = JSON.stringify({
+    event_id: rsvp.event_id, name: rsvp.name, email: rsvp.email || '',
+    phone: rsvp.phone || '', adults: rsvp.adults, children: rsvp.children,
+    token: rsvp.token
+  });
+  logOutbox_(rsvp.email ? 'email' : 'whatsapp', rsvp.email || rsvp.phone || '', kind, rsvp.event_id, 'PENDING', detail);
+}
+
+/**
+ * Sends queued confirmation/update/cancel/manage-link emails. Runs on
+ * a 1-minute trigger (installConfirmSenderTrigger). Skips rows another
+ * run is already sending (script lock). Each row is marked SENT only
+ * after its email goes out, FAILED with the error if the send throws
+ * (a later run does not retry FAILED rows — an organizer can see them
+ * in Outbox). Reminder/announcement/nudge emails already run from
+ * triggers and still send directly.
+ */
+function sendQueuedConfirmations() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return; // another run is sending; try next minute
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(OUTBOX_SHEET);
+    if (!sh || sh.getLastRow() < 2) return;
+    var values = sh.getDataRange().getValues();
+    var col = {};
+    values[0].forEach(function (h, j) { col[h] = j; });
+    var QUEUED_KINDS = ['confirmation', 'updated', 'cancelled', 'manage-link'];
+    for (var i = 1; i < values.length; i++) {
+      var v = values[i];
+      if (v[col.status] !== 'PENDING') continue;
+      if (QUEUED_KINDS.indexOf(v[col.kind]) === -1) continue;
+      var rowIdx = i + 1; // values[0] is the header (sheet row 1)
+      try {
+        var d = JSON.parse(v[col.detail] || '{}');
+        var rsvp = { event_id: d.event_id, name: d.name, email: d.email, phone: d.phone, adults: d.adults, children: d.children, token: d.token };
+        notify_(rsvp, findEvent_(d.event_id), v[col.kind]);
+        sh.getRange(rowIdx, col.status + 1).setValue('SENT');
+      } catch (e) {
+        sh.getRange(rowIdx, col.status + 1).setValue('FAILED');
+        try { sh.getRange(rowIdx, col.detail + 1).setValue(String(v[col.detail] || '') + ' | error: ' + String(e && e.message || e)); } catch (e2) {}
+      }
+    }
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 /**
  * Sends via every channel the attendee provided (email and/or WhatsApp),
