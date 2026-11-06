@@ -631,8 +631,14 @@
       function buildMine_(parts) {
         var details = getDetails();
         var all = [];
+        var seen = {};
         (parts || []).forEach(function (part) {
           (part.rsvps || []).forEach(function (r) {
+            // One card per RSVP: the backend now returns the whole
+            // email's RSVPs for every stored token, so the same row
+            // comes back once per token. Keep the first copy only.
+            if (seen[r.rsvp_id]) return;
+            seen[r.rsvp_id] = true;
             var ev = eventById(r.event_id);
             var d = details[r.rsvp_id] || {};
             var nm = r.name || d.name || "", em = r.email || d.email || "", ph = r.phone || d.phone || "";
