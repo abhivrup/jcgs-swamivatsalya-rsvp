@@ -1011,11 +1011,11 @@
           sent = "Demo mode — <b>nothing was sent or shared</b>. This RSVP is only on this device. " +
             "In live mode your confirmation &amp; manage link go to the contact you gave.";
         } else if (hasEmail(r) && hasPhone(r)) {
-          sent = "Your confirmation &amp; manage link were sent by <b>Email</b> to <b>" + esc(maskEmail(r.email)) + "</b> and by <b>WhatsApp</b> to <b>" + esc(maskPhone(r.phone)) + "</b>.";
+          sent = "Your confirmation &amp; manage link are on their way by <b>Email</b> to <b>" + esc(maskEmail(r.email)) + "</b> and by <b>WhatsApp</b> to <b>" + esc(maskPhone(r.phone)) + "</b>. They usually arrive within a minute or two.";
         } else if (hasPhone(r)) {
           sent = "Your confirmation &amp; manage link were sent by <b>WhatsApp</b> to <b>" + esc(maskPhone(r.phone)) + "</b>.";
         } else {
-          sent = "Your confirmation &amp; manage link were sent by <b>Email</b> to <b>" + esc(maskEmail(r.email)) + "</b>.";
+          sent = "Your confirmation &amp; manage link are on their way by <b>Email</b> to <b>" + esc(maskEmail(r.email)) + "</b>. They usually arrive within a minute or two.";
         }
         if (deduped || r.deduped) {
           sent += "<br />Your existing RSVP for this event was updated — it was not counted twice.";
@@ -1114,7 +1114,7 @@
         apiPost({ action: "sendMyLink", email: email, phone: phone })
           .then(function (data) {
             if (!data || !data.ok) throw new Error((data && data.error) || "Could not send the link.");
-            toast("Manage link sent. Check your email.");
+            toast("Manage link on its way — check your email in a minute or two.");
           })
           .catch(function (e) { err.textContent = e.message || String(e); err.classList.add("show"); });
       }
