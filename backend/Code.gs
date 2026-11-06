@@ -218,12 +218,32 @@ function createRsvp_(b) {
 
 function myRsvps_(token) {
   if (!token) return [];
-  return readRows_(RSVPS_SHEET)
-    .filter(function (r) { return r.token === token && r.status === 'active'; })
-    .map(function (r) {
-      var ev = findEvent_(r.event_id);
-      return { rsvp_id: r.rsvp_id, event_id: r.event_id, title: ev ? ev.title : '', date: ev ? ev.date : '', adults: r.adults, children: r.children, comment: r.comment, name: r.name, email: r.email, phone: r.phone };
+  var rows = readRows_(RSVPS_SHEET);
+  var mine = rows.filter(function (r) { return r.token === token && r.status === 'active'; });
+  if (!mine.length) return [];
+  // One manage link now shows every RSVP under the same email, so a
+  // second device sees all events — not just the one the link is for.
+  // The token stays the proof: only someone holding a valid link for
+  // that email can see its RSVPs. Phone-only rows (no email) keep the
+  // old behaviour and return just their own RSVP.
+  var email = String(mine[0].email || '').trim().toLowerCase();
+  if (email) {
+    mine = rows.filter(function (r) {
+      return r.status === 'active' && String(r.email || '').trim().toLowerCase() === email;
     });
+  }
+  // Active events only — same rule as listEvents_: the event must still
+  // be open and its date today or in the future. RSVPs for past (or
+  // closed) events no longer show in My RSVPs.
+  var now = new Date();
+  return mine.map(function (r) {
+    return { r: r, ev: findEvent_(r.event_id) };
+  }).filter(function (pair) {
+    return !!pair.ev && pair.ev.status === 'open' && new Date(pair.ev.date) >= startOfDay_(now);
+  }).map(function (pair) {
+    var r = pair.r, ev = pair.ev;
+    return { rsvp_id: r.rsvp_id, event_id: r.event_id, title: ev.title, date: ev.date, adults: r.adults, children: r.children, comment: r.comment, name: r.name, email: r.email, phone: r.phone };
+  });
 }
 
 function myRsvpsAll_(tokensCsv) {
