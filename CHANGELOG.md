@@ -5,7 +5,9 @@ change). Frontend versions live in the GitHub repo
 `abhivrup/jcgs-swamivatsalya-rsvp` — see `FRONTEND_HISTORY.md` for the
 grouped version list. Deploy status is the truth that matters: backend v1.6 is deployed
 (confirmed 2026-11-04). v1.7 was never deployed on its own — v1.8
-contains it and is pending one redeploy.
+contains it and was redeployed by him 2026-11-05 ~18:14 PST (backend
+alive confirmed via listEvents; version proof pending the
+second-device test). v1.9 is pending one redeploy.
 
 Status words: Deployed = running on the test backend / live Pages site.
 Pending = code written and checked, not yet deployed. Never deployed
@@ -183,6 +185,35 @@ or reviewed exactly.
   v1.7 (keeps the confirmation link, loses this fix).
 - Verified: syntax check passes; diff to v1.7 is exactly the
   `myRsvps_` rewrite.
+
+### Backend v1.9 — My RSVPs shows only the latest RSVP per event + each row carries its own token (2026-11-05) — PENDING (current)
+
+- Bug reported 2026-11-05 ~18:18 PST: after the v1.8 fix, one manage
+  link showed Test Event 2 three times. The v1.8 email expansion
+  returns every row for the email, and the Sheet holds duplicate
+  active rows for that email + event (cause still being read off the
+  Sheet — see the 18:22 browser check; the count says 5 attending,
+  so three 2-adult rows cannot all be live headcount).
+- `myRsvps_` now keeps only the latest RSVP per event — the most
+  recently updated row wins (`rowTime_`: updated_at, else
+  created_at, else sheet order). One card per event, always the
+  current headcount.
+- Each returned row now also carries its own `token`. The page
+  (frontend v12) uses it, so Modify/Cancel work on every event
+  shown — not just the one the manage link was for. Without this,
+  v1.8's expanded rows would have failed Modify/Cancel with "RSVP
+  not found for that manage link" on any event but the link's own
+  (the page used to stamp every row with the link's token).
+- No other behaviour change: still all events for the email, still
+  active events only (open + today or later).
+- Needs after redeploy: nothing new — no trigger or setup re-runs.
+  Frontend v12 must deploy with it (the token line is harmless
+  against the old backend: `r.token` is simply absent, so the page
+  falls back to the link token as before).
+- Revert: redeploy v1.8 + frontend v11 (triplicates return).
+- Verified: syntax check passes; diff to v1.8 is exactly the
+  `myRsvps_` latest-per-event dedupe, the `token` field, and the
+  `rowTime_` helper.
 
 ## Frontend (GitHub repo `abhivrup/jcgs-swamivatsalya-rsvp`) — DEPLOYED
 
