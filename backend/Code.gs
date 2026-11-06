@@ -187,6 +187,13 @@ function createRsvp_(b) {
 
     // Dedupe: same email OR same phone already active for this event -> update it.
     var rows = readRows_(RSVPS_SHEET);
+    // v1.11: one RSVPs read, not two — the attending total comes from
+    // the rows already read for the dedupe scan instead of a second
+    // headcounts_() call (which re-read the whole sheet).
+    var attending = 0;
+    rows.forEach(function (r) {
+      if (r.event_id === b.event_id && r.status === 'active') attending += Number(r.adults || 0) + Number(r.children || 0);
+    });
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       if (r.event_id !== b.event_id || r.status !== 'active') continue;
@@ -195,7 +202,7 @@ function createRsvp_(b) {
         // capacity check as a new RSVP (spots already held by this RSVP
         // do not count against it). Previously this path updated without
         // any check, so it could push an event over capacity.
-        var others = (headcounts_()[b.event_id] || 0) - (Number(r.adults || 0) + Number(r.children || 0));
+        var others = attending - (Number(r.adults || 0) + Number(r.children || 0));
         if (others + adults + children > Number(ev.capacity)) {
           return { ok: false, error: 'Not enough spots left for that headcount.', spots_left: Math.max(0, Number(ev.capacity) - others) };
         }
@@ -209,7 +216,7 @@ function createRsvp_(b) {
     }
 
     // Capacity enforced here, at write time, inside the lock.
-    var attending = (headcounts_()[b.event_id] || 0);
+    // v1.11: attending was already totalled from the single read above.
     if (attending + adults + children > Number(ev.capacity)) {
       return { ok: false, error: 'Not enough spots left for that headcount.', spots_left: Math.max(0, Number(ev.capacity) - attending) };
     }
@@ -289,9 +296,15 @@ function myRsvpsAll_(tokensCsv) {
 }
 
 function updateRsvp_(b) {
-  return mutateRsvp_(b, function (r, sh, rowIdx) {
+  return mutateRsvp_(b, function (r, sh, rowIdx, rows) {
     var ev = findEvent_(r.event_id);
-    var others = (headcounts_()[r.event_id] || 0) - (Number(r.adults) + Number(r.children));
+    // v1.11: totals from the rows mutateRsvp_ already read, not a
+    // second headcounts_() call (which re-read the whole sheet).
+    var attending = 0;
+    rows.forEach(function (x) {
+      if (x.event_id === r.event_id && x.status === 'active') attending += Number(x.adults || 0) + Number(x.children || 0);
+    });
+    var others = attending - (Number(r.adults) + Number(r.children));
     var adults = clampCount_(b.adults), children = clampCount_(b.children);
     if (ev && others + adults + children > Number(ev.capacity)) return { ok: false, error: 'That change would exceed the event capacity.' };
     writeRsvpRow_(sh, rowIdx, { adults: adults, children: children, comment: String(b.comment == null ? r.comment : b.comment), updated_at: new Date() });
@@ -319,7 +332,7 @@ function mutateRsvp_(b, fn) {
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].token === String(b.token || '') && rows[i].rsvp_id === String(b.rsvp_id || '')) {
         if (rows[i].status !== 'active') return { ok: false, error: 'That RSVP is no longer active.' };
-        return fn(rows[i], sh, i + 2);
+        return fn(rows[i], sh, i + 2, rows); // v1.11: rows travel with the callback so updateRsvp_ needs no second read
       }
     }
     return { ok: false, error: 'RSVP not found for that manage link.' };
