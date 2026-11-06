@@ -344,6 +344,7 @@
       var MY = [];     // merged own RSVPs: {rsvp_id, event_id, token, title, dateLabel, start_time, place, adults, children, comment, name, email, phone}
       var formCtx = null; // {eventId, rsvpId|null, adults, children}
       var lastSaved = null; // last created/updated RSVP, for the confirmation screen
+      var refreshPromise = null; // background loadAll() after a save, if one is running
 
       /* ---------------- helpers ---------------- */
       function $(id) { return document.getElementById(id); }
@@ -957,7 +958,15 @@
       function submitLive(ev, existing, name, email, phone, comment) {
         var btn = document.querySelector("[data-act='submit']");
         if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
-        var done = function () { loadAll().then(function () { renderConfirm(lastSaved, !!existing, false); }); };
+        // Show the confirmation at once and refresh the lists behind
+        // it: the RSVP is already saved in the Sheet by the time the
+        // server answers, so there is nothing to wait for. The
+        // refresh only reads data; if it fails, the RSVP is still
+        // in the Sheet and the screen already shows what was saved.
+        var done = function () {
+          renderConfirm(lastSaved, !!existing, false);
+          refreshPromise = loadAll();
+        };
         if (existing) {
           apiPost({ action: "updateRsvp", token: existing.token, rsvp_id: existing.rsvp_id, adults: formCtx.adults, children: formCtx.children, comment: comment })
             .then(function (data) {
@@ -978,12 +987,17 @@
               adults: formCtx.adults, children: formCtx.children, comment: comment,
               deduped: !!data.deduped, message: data.message || ""
             };
-            // Keep name/contact on this device only, so future RSVPs
-            // can prefill them later. The Sheet is the source of truth.
-            return loadAll().then(function () {
+            // Show the confirmation at once (see done() above), then
+            // refresh the lists in the background. The RSVP is
+            // already in the Sheet; the refresh only reads.
+            renderConfirm(lastSaved, false, false);
+            refreshPromise = loadAll();
+            return refreshPromise.then(function () {
+              // Keep name/contact on this device only, so future
+              // RSVPs can prefill them later. The Sheet is the
+              // source of truth.
               var mine = myForEvent(ev.event_id);
               if (mine) { saveDetail(mine.rsvp_id, { name: name, email: email, phone: phone }); lastSaved.rsvp_id = mine.rsvp_id; }
-              renderConfirm(lastSaved, false, false);
             });
           })
           .catch(function (err) { toast(err.message || String(err)); if (btn) { btn.disabled = false; btn.textContent = "Confirm RSVP"; } });
@@ -1143,7 +1157,13 @@
         if (act === "rsvp") openForm(id, null);
         else if (act === "edit") openForm((MY.filter(function (x) { return x.rsvp_id === id; })[0] || {}).event_id, id);
         else if (act === "back-events") { renderEvents(); show("events"); }
-        else if (act === "go-mine") { renderMine(); show("mine"); }
+        else if (act === "go-mine") {
+          // If the background refresh after a save is still running,
+          // wait for it so the just-saved RSVP is guaranteed to be
+          // in the list when it opens.
+          if (refreshPromise) { refreshPromise.then(function () { renderMine(); show("mine"); }); }
+          else { renderMine(); show("mine"); }
+        }
         else if (act === "reload") { loadAll().then(function () { show("events"); }); }
         else if (act === "step") {
           var who = t.getAttribute("data-who"), d = parseInt(t.getAttribute("data-d"), 10);
