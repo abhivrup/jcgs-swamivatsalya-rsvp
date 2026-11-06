@@ -4,7 +4,8 @@ Backend versions live in `backend/Code.gs` in this repo (one commit per
 change). Frontend versions live in the GitHub repo
 `abhivrup/jcgs-swamivatsalya-rsvp` — see `FRONTEND_HISTORY.md` for the
 grouped version list. Deploy status is the truth that matters: backend v1.6 is deployed
-(confirmed 2026-11-04). v1.7 is pending one redeploy.
+(confirmed 2026-11-04). v1.7 was never deployed on its own — v1.8
+contains it and is pending one redeploy.
 
 Status words: Deployed = running on the test backend / live Pages site.
 Pending = code written and checked, not yet deployed. Never deployed
@@ -152,6 +153,36 @@ or reviewed exactly.
   `subscribe_` rewrite, `confirmSubscribe_`, `confirmEmail_`,
   `countRecentConfirms_`, the unsubscribe condition, and the doPost
   branch. Spec: `rsvp-confirm-scope-2026-11-04.md`.
+
+### Backend v1.8 — My RSVPs shows all events for the email, active events only (2026-11-05) — PENDING (current)
+
+- Bug reported 2026-11-05: on a second device, opening a manage link
+  showed only that link's event, not the person's other RSVPs. Cause:
+  one token per RSVP row, and the page only knew the tokens stored on
+  that device — so a fresh device saw a single event.
+- `myRsvps_` now expands from the link's token to the email on that
+  row and returns every active RSVP under the same email (matched
+  case-insensitively; emails are stored lowercased). The token stays
+  the proof — only someone holding a valid manage link for that email
+  can see its RSVPs. Phone-only rows (no email) keep the old
+  behaviour and return just their own RSVP. `myRsvpsAll_` inherits
+  the fix automatically (it calls `myRsvps_` per token).
+- Active events only, per his ask: results are filtered to events
+  that are still `open` with a date of today or later — the same rule
+  `listEvents_` uses. RSVPs for past (or closed) events no longer
+  show in My RSVPs.
+- No frontend change needed: the page already renders every RSVP the
+  backend returns for a token (`buildMine_` flattens them). Note the
+  page keeps a 7-day cached copy of My RSVPs, so a device that
+  already loaded the old view refreshes to the new one on its next
+  background refresh.
+- Needs after redeploy: nothing new — no trigger or setup re-runs.
+  Redeploying v1.8 also ships v1.7 (confirmation link), so the
+  Friday 09:41 probe for v1.7 answers the same for v1.8.
+- Revert: redeploy v1.6 (loses the v1.7 confirmation link too) or
+  v1.7 (keeps the confirmation link, loses this fix).
+- Verified: syntax check passes; diff to v1.7 is exactly the
+  `myRsvps_` rewrite.
 
 ## Frontend (GitHub repo `abhivrup/jcgs-swamivatsalya-rsvp`) — DEPLOYED
 
