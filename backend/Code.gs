@@ -236,14 +236,31 @@ function myRsvps_(token) {
   // be open and its date today or in the future. RSVPs for past (or
   // closed) events no longer show in My RSVPs.
   var now = new Date();
-  return mine.map(function (r) {
+  var pairs = mine.map(function (r) {
     return { r: r, ev: findEvent_(r.event_id) };
   }).filter(function (pair) {
     return !!pair.ev && pair.ev.status === 'open' && new Date(pair.ev.date) >= startOfDay_(now);
-  }).map(function (pair) {
-    var r = pair.r, ev = pair.ev;
-    return { rsvp_id: r.rsvp_id, event_id: r.event_id, title: ev.title, date: ev.date, adults: r.adults, children: r.children, comment: r.comment, name: r.name, email: r.email, phone: r.phone };
   });
+  // One RSVP per event: if duplicate rows exist for the same email and
+  // event, show only the latest one — the most recently updated row
+  // wins. (Dedupe at write time should prevent these, but old rows can
+  // predate it.)
+  var latest = {};
+  pairs.forEach(function (pair) {
+    var prev = latest[pair.r.event_id];
+    if (!prev || rowTime_(pair.r) >= rowTime_(prev.r)) latest[pair.r.event_id] = pair;
+  });
+  return Object.keys(latest).map(function (eventId) {
+    var pair = latest[eventId], r = pair.r, ev = pair.ev;
+    // The row's own token travels with it, so Modify/Cancel work on
+    // every event shown — not just the one the manage link was for.
+    return { rsvp_id: r.rsvp_id, event_id: r.event_id, title: ev.title, date: ev.date, adults: r.adults, children: r.children, comment: r.comment, name: r.name, email: r.email, phone: r.phone, token: r.token };
+  });
+}
+
+function rowTime_(r) {
+  var t = new Date(r.updated_at || r.created_at || 0).getTime();
+  return isNaN(t) ? 0 : t;
 }
 
 function myRsvpsAll_(tokensCsv) {
