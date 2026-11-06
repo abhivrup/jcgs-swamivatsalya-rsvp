@@ -166,6 +166,9 @@
       .btn-quiet { background: var(--surface-2); color: var(--ink); border-color: var(--line); }
       .btn-danger { background: transparent; color: var(--danger); border-color: var(--danger); }
       .btn[disabled] { opacity: .45; cursor: not-allowed; }
+      .btn.busy { opacity: .8; }
+      .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; vertical-align: -2px; margin-right: 6px; animation: spin 0.8s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
       .btn-block { display: block; width: 100%; }
       .event .actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
       .event .actions .btn { padding: 10px 18px; }
@@ -494,6 +497,24 @@
         t.classList.add("show");
         if (toastTimer) clearTimeout(toastTimer);
         toastTimer = setTimeout(function () { t.classList.remove("show"); }, 3200);
+      }
+
+      /* Busy state for the slow taps (RSVP / Save / Cancel / Send link):
+         the server round-trip takes ~4s, so the button shows a spinner
+         and says what it is doing instead of sitting unchanged while
+         the user wonders whether the tap registered. */
+      function setBusy(btn, label) {
+        if (!btn) return;
+        if (btn.dataset.label === undefined) btn.dataset.label = btn.textContent;
+        btn.disabled = true;
+        btn.classList.add("busy");
+        btn.innerHTML = '<span class="spin"></span> ' + label;
+      }
+      function clearBusy(btn) {
+        if (!btn) return;
+        btn.disabled = false;
+        btn.classList.remove("busy");
+        if (btn.dataset.label !== undefined) { btn.textContent = btn.dataset.label; delete btn.dataset.label; }
       }
 
       /* ---------------- backend API (live mode) ---------------- */
@@ -957,7 +978,7 @@
 
       function submitLive(ev, existing, name, email, phone, comment) {
         var btn = document.querySelector("[data-act='submit']");
-        if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+        setBusy(btn, "Saving…");
         // Show the confirmation at once and refresh the lists behind
         // it: the RSVP is already saved in the Sheet by the time the
         // server answers, so there is nothing to wait for. The
@@ -974,7 +995,7 @@
               lastSaved = Object.assign({}, existing, { adults: formCtx.adults, children: formCtx.children, comment: comment });
               done();
             })
-            .catch(function (err) { toast(err.message || String(err)); if (btn) { btn.disabled = false; btn.textContent = "Save changes"; } });
+            .catch(function (err) { toast(err.message || String(err)); clearBusy(btn); });
           return;
         }
         apiPost({ action: "createRsvp", event_id: ev.event_id, name: name, email: email, phone: phone, adults: formCtx.adults, children: formCtx.children, comment: comment })
@@ -1000,7 +1021,7 @@
               if (mine) { saveDetail(mine.rsvp_id, { name: name, email: email, phone: phone }); lastSaved.rsvp_id = mine.rsvp_id; }
             });
           })
-          .catch(function (err) { toast(err.message || String(err)); if (btn) { btn.disabled = false; btn.textContent = "Confirm RSVP"; } });
+          .catch(function (err) { toast(err.message || String(err)); clearBusy(btn); });
       }
 
       /* ---------------- confirmation ---------------- */
@@ -1111,12 +1132,15 @@
           else { err.textContent = "Demo mode: no RSVP on this device matches that contact."; err.classList.add("show"); }
           return;
         }
+        var btn = document.querySelector("[data-act='send-link']");
+        setBusy(btn, "Sending…");
         apiPost({ action: "sendMyLink", email: email, phone: phone })
           .then(function (data) {
             if (!data || !data.ok) throw new Error((data && data.error) || "Could not send the link.");
+            clearBusy(btn);
             toast("Manage link on its way — check your email in a minute or two.");
           })
-          .catch(function (e) { err.textContent = e.message || String(e); err.classList.add("show"); });
+          .catch(function (e) { clearBusy(btn); err.textContent = e.message || String(e); err.classList.add("show"); });
       }
 
       function cancelRsvp(rsvpId) {
@@ -1129,6 +1153,8 @@
           toast("RSVP cancelled — your spots were released.");
           return;
         }
+        var btn = document.querySelector("[data-act='cancel-yes'][data-id='" + rsvpId + "']");
+        setBusy(btn, "Cancelling…");
         apiPost({ action: "cancelRsvp", token: r.token, rsvp_id: rsvpId })
           .then(function (data) {
             if (!data || !data.ok) throw new Error((data && data.error) || "Could not cancel the RSVP.");
@@ -1136,7 +1162,7 @@
             return loadAll();
           })
           .then(function () { show("mine"); toast("RSVP cancelled — your spots were released."); })
-          .catch(function (e) { toast(e.message || String(e)); });
+          .catch(function (e) { clearBusy(btn); toast(e.message || String(e)); });
       }
 
       /* ---------------- events wiring ---------------- */
