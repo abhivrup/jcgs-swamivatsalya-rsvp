@@ -7,7 +7,9 @@ grouped version list. Deploy status is the truth that matters: backend v1.6 is d
 (confirmed 2026-11-04). v1.7 was never deployed on its own — v1.8
 contains it and was redeployed by him 2026-11-05 ~18:14 PST (backend
 alive confirmed via listEvents; version proof pending the
-second-device test). v1.9 is pending one redeploy.
+second-device test). v1.9 was redeployed by him 2026-11-05 ~18:29
+PST (he said "Done"; behaviour proof is the single-card My RSVPs
+on the second device). v1.10 is pending one redeploy.
 
 Status words: Deployed = running on the test backend / live Pages site.
 Pending = code written and checked, not yet deployed. Never deployed
@@ -216,6 +218,44 @@ or reviewed exactly.
 - Verified: syntax check passes; diff to v1.8 is exactly the
   `myRsvps_` latest-per-event dedupe, the `token` field, and the
   `rowTime_` helper.
+
+### Backend v1.10 — My RSVPs survives cancelling the link's own RSVP + confirmation emails send in the background (2026-11-05) — PENDING (current)
+
+- Bug reported 2026-11-05 ~19:07 PST: on a new device, opening
+  the app and RSVP'ing showed previous RSVPs fine — but after
+  cancelling the RSVP just made, My RSVPs went empty, hiding the
+  RSVPs made on other devices. Root cause: `myRsvps_` anchored
+  the email expansion on the token's own ACTIVE row, so once that
+  row was cancelled the call returned nothing at all. Fix: the
+  anchor is now the token's row whatever its status; the expansion
+  still returns active rows only (phone-only rows re-apply the
+  active filter, since they have no email to expand on).
+- Speed (his pick, option 2, 2026-11-05 ~19:05 PST): user-triggered
+  emails — confirmation, updated, cancelled, manage-link — are now
+  QUEUED to Outbox (`queueNotify_`, status PENDING) instead of
+  sent inside the tap. A 1-minute trigger
+  (`sendQueuedConfirmations`, installer
+  `installConfirmSenderTrigger`, idempotent like the other three)
+  sends queued rows: it claims the script lock (skips the run if
+  another is sending), re-resolves the event, calls the existing
+  `notify_` (same email text), then marks the row SENT — or
+  FAILED with the error if the send throws (FAILED rows are not
+  retried automatically; they stay visible in Outbox). The RSVP
+  row is written BEFORE the queue row, so a send failure can
+  never lose an RSVP. Reminder/announcement/nudge emails already
+  run from triggers and still send directly. The confirmation
+  screen now says the email is on its way (frontend v15).
+- Needs after redeploy: run `installConfirmSenderTrigger()` ONCE
+  in the editor (no redeploy needed for triggers). Until it runs,
+  confirmation emails queue as PENDING and never send — verify
+  the first confirmation email arrives within ~2 minutes of a
+  test RSVP. No setupSheet re-run needed.
+- Revert: redeploy v1.9 + frontend v14 (emails go back to
+  synchronous; the cancel bug returns).
+- Verified: syntax check passes; diff to v1.9 is exactly the
+  `myRsvps_` anchor fix, the five `notify_` → `queueNotify_`
+  swaps, and the new `queueNotify_` / `sendQueuedConfirmations` /
+  `installConfirmSenderTrigger` functions.
 
 ## Frontend (GitHub repo `abhivrup/jcgs-swamivatsalya-rsvp`) — DEPLOYED
 
